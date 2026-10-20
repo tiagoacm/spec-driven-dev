@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spec-driven-dev — como usar o harness — v2.3.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #0f1215; overflow: hidden; }
+  #viewport { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #stage { position: relative; width: 1920px; height: 1080px; transform-origin: center center; flex: none; }
+  #stage > section { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; }
+  /* cada slide traz display:flex inline; só !important consegue esconder os inativos */
+  @media screen { #stage > section:not(.ativo) { display: none !important; } }
+  #stage > section > aside { display: none !important; }
+  table { border-spacing: 0; }
+  ul, ol { padding-left: 1.2em; }
+  #barra { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; align-items: center;
+           background: rgba(27,31,36,.92); color: #f3efe6; font: 14px 'IBM Plex Sans', Arial, sans-serif; padding: 6px 10px;
+           border-radius: 999px; opacity: 0; transition: opacity .2s; z-index: 10; }
+  body:hover #barra, #barra:focus-within { opacity: 1; }
+  #barra button { background: transparent; color: inherit; border: 1px solid rgba(243,239,230,.35); border-radius: 999px;
+                  padding: 4px 12px; font: inherit; cursor: pointer; }
+  #barra button:focus-visible { outline: 2px solid #e0874f; outline-offset: 2px; }
+  #contador { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+  #notas { position: fixed; left: 16px; right: 16px; bottom: 64px; max-width: 900px; margin: 0 auto; background: #f6f4ef; color: #1b1f24;
+           font: 18px/1.5 'IBM Plex Sans', Arial, sans-serif; padding: 16px 20px; border-radius: 12px; display: none; z-index: 10; }
+  #notas.visivel { display: block; }
+  @media print {
+    @page { size: 1920px 1080px; margin: 0; }
+    html, body { height: auto; overflow: visible; background: none; }
+    #viewport { position: static; display: block; }
+    #stage { transform: none !important; width: 1920px; height: auto; }
+    #stage > section { position: relative; page-break-after: always; break-after: page; }
+    #barra, #notas { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="viewport"><div id="stage">
+<section id="cover" style="background:#1b1f24; color:#f3efe6; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px; display:flex; flex-direction:column; justify-content:space-between">
+  <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:28px; color:#e0874f">Claude Code · plugin · v2.3.0</p>
+  <div style="display:flex; flex-direction:column; gap:32px">
+    <h1 style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:120px; font-weight:700; line-height:1.05">spec-driven-dev</h1>
+    <p style="font-size:44px; line-height:1.3; width:1400px; color:#f3efe6">Um harness de Spec Driven Development para qualquer stack: do contexto do projeto ao código validado — nos testes, na tela e na revisão.</p>
+  </div>
+  <p style="font-size:26px; color:#a9a49a">Como usar o plugin · passo a passo</p>
+  <aside>Apresentação do fluxo completo: inicialização, especificação, execução com verificação de interface, manutenção e segurança.</aside>
+</section>
+<section id="principio" data-transition="fade" style="background:#1b1f24; color:#f3efe6; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px; display:flex; flex-direction:column; justify-content:center; gap:40px">
+  <p style="font-size:26px; font-weight:600; letter-spacing:2px; color:#e0874f">O PRINCÍPIO</p>
+  <h2 style="font-size:88px; font-weight:600; line-height:1.1; width:1500px">O agente implementa.<br>A validação decide.</h2>
+  <p style="font-size:34px; line-height:1.45; width:1400px; color:#cfc9bd">Nenhuma tarefa é dada como pronta pelo relato do agente. Ela passa por um teste rodado por fora, pela tela num navegador real e por uma revisão feita por quem não escreveu o código.</p>
+  <aside>Fio condutor de todo o harness: o 'pronto' é sempre verificado mecanicamente, nunca declarado.</aside>
+</section>
+<section id="fluxo" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px; justify-content:space-between">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">VISÃO GERAL</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">Quatro etapas, um fluxo</h2>
+  </div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#2b6468">1</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Inicialização</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/init</span> descobre como o projeto funciona e o que será construído.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#2b6468">2</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Especificação</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/plan</span> transforma uma fatia em spec aprovada e plano de tarefas.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#b24d17">3</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Execução</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/implement</span> com você, ou <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">ralph.sh</span> sozinho, com os mesmos gates.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#b24d17">4</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Manutenção</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/revise</span> aplica mudança de requisito; <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/review</span> revisa sob demanda.</p>
+    </div>
+  </div>
+  <p style="font-size:28px; line-height:1.45; color:#5d6168">Tudo o que o harness sabe do projeto fica em <b style="color:#1b1f24">.sdd/</b>, versionado junto com o código.</p>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Visão geral · 03</p>
+  <aside>As duas primeiras etapas produzem documentos; a terceira produz código validado; a quarta mantém tudo coerente quando o requisito muda.</aside>
+</section>
+<section id="instalacao" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">COMEÇANDO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">Instalação</h2>
+  </div>
+  <div style="background:#1b1f24; border-radius:16px; padding:40px 48px"><p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:25px; line-height:1.6; color:#f3efe6"><span style="color:#a9a49a"># no Claude Code</span><br>/plugin marketplace add &lt;caminho&gt;/sdd-marketplace<br>/plugin install spec-driven-dev@sdd-local<br><br><span style="color:#a9a49a"># scripts rodam da raiz do projeto (Git Bash ou WSL no Windows)</span><br>&lt;plugin&gt;/scripts/ralph.sh &lt;slug&gt;        <span style="color:#a9a49a">execução autônoma</span><br>&lt;plugin&gt;/scripts/sdd-check.sh plan &lt;slug&gt; <span style="color:#a9a49a">validação dos artefatos</span></p></div>
+  <p style="font-size:28px; line-height:1.45; color:#5d6168">Os comandos ganham o prefixo do plugin: <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/spec-driven-dev:init</span>, <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/spec-driven-dev:plan</span>… Precisa de <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">jq</span>, <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">python</span> ou <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">node</span> para ler o config.</p>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Instalação · 04</p>
+  <aside>Marketplace local. Os scripts rodam a partir da raiz do projeto; no Windows, em Git Bash ou WSL.</aside>
+</section>
+<section id="init" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 1 · INICIALIZAÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">/init: um roteador e três passos</h2>
+  </div>
+  <table style="width:1664px; border-collapse:collapse"><tr><th style="text-align:left; padding:16px 24px; font-size:26px; font-weight:600; background:#1b1f24; color:#f3efe6">Comando</th><th style="text-align:left; padding:16px 24px; font-size:26px; font-weight:600; background:#1b1f24; color:#f3efe6">Responde</th><th style="text-align:left; padding:16px 24px; font-size:26px; font-weight:600; background:#1b1f24; color:#f3efe6">Gera</th><th style="text-align:left; padding:16px 24px; font-size:26px; font-weight:600; background:#1b1f24; color:#f3efe6">Quando</th></tr><tr><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/init</span></td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Onde estou?</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Nada — mostra o estado, roda o <b>sdd-check</b> e chama o próximo passo</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Sempre</td></tr><tr><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">init:context</span></td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Como se desenvolve aqui</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">STANDARDS.md · config.json · CLAUDE.md · .mcp.json · codebase.md</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Sempre</td></tr><tr><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">init:project</span></td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">O que será construído</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">project.md — fluxos F-NN, entidades E-NN, MVP</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Projeto novo</td></tr><tr><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">init:roadmap</span></td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Em que ordem</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">roadmap.md — fases prontas para o /plan</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Projeto novo</td></tr></table>
+  <p style="font-size:28px; line-height:1.45; color:#5d6168">Cada artefato carimba a versão do plugin. Formato antigo aparece como <b style="color:#1b1f24">desatualizado (formato)</b>, mesmo com as entradas em dia.</p>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Inicialização · 05</p>
+  <aside>O roteador nunca escreve nada. Em projeto existente, project e roadmap são opcionais.</aside>
+</section>
+<section id="context" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 1 · INICIALIZAÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">init:context — como se desenvolve aqui</h2>
+  </div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #2b6468; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">STANDARDS.md</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Stack, arquitetura, convenções, testes, <b>interface</b>, segurança, git e regras para agentes. Cada regra com origem: <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">[observado]</span> <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">[decidido]</span> <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">[esqueleto]</span>.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #2b6468; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">config.json</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Modo, comandos (um por valor ou lista — nunca <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">&amp;&amp;</span>), <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">paths.frontend</span>, ambiente de verificação e preferências lembradas.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #b24d17; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">codebase.md</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Só em projeto existente: retrato do sistema atual — módulos, entidades, interfaces e regras com arquivo:linha.</p>
+    </div>
+  </div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Seção Interface</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Layout padrão e onde fica a navegação, biblioteca de componentes, padrão de formulário, retorno após ação, idioma da interface e das mensagens, tela de referência.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Barreiras</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Regras <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">deny</span> no .claude/settings.json (segredos, git push) e o <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">.mcp.json</span> do navegador de verificação.</p>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Inicialização · 06</p>
+  <aside>Descobre antes de perguntar. Confirma novo ou existente com evidência. Respostas ficam em preferences e não são perguntadas de novo.</aside>
+</section>
+<section id="project" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 1 · INICIALIZAÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">init:project e init:roadmap — o quê e em que ordem</h2>
+  </div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #2b6468; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Entrevista de produto</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Propósito, atores e permissões, conceitos com números, fluxos com caminhos infelizes, fronteira do MVP. O que ficar indefinido vira questão em aberto.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #b24d17; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Roadmap em fases</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Cada fase é uma fatia entregável, do tamanho de um plano, com dependências, entrega verificável e a <b>Entrada para /plan</b> pronta.</p>
+    </div>
+  </div>
+  <div style="background:#1b1f24; border-radius:16px; padding:40px 48px"><p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; line-height:1.6; color:#f3efe6">## Fase 2: Criação e envio<br>- **Status**: pendente  <span style="color:#a9a49a">→ planejada (slug) → implementada (slug)</span><br>- **Cobre**: F-01, E-01, E-02, E-03<br>- **Entrada para /plan**: slug `criacao-e-envio` — ...</p></div>
+  <p style="font-size:28px; line-height:1.45; color:#5d6168">Questão respondida numa spec volta marcada como resolvida no project.md, e o bloqueio sai da fase.</p>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Inicialização · 07</p>
+  <aside>Fases planejadas ou implementadas ficam congeladas; mudanças nelas passam pelo /revise.</aside>
+</section>
+<section id="plan" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px; justify-content:space-between">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 2 · ESPECIFICAÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">/plan — da ideia ao plano, numa execução</h2>
+  </div>
+  <div style="display:flex; gap:24px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#2b6468">1</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Guardas</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d">Verifica o que já existe no código e barra escopo grande demais.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#2b6468">2</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Spec</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d">RF testáveis, CA binários, critérios de interface, impacto com arquivo:linha.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#b24d17">3</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Perguntas</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d">Cada <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">[CLARIFICAR]</span> vira pergunta objetiva. Mais de 3 abertos: sem aprovação.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#b24d17">4</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Aprovação</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d">Você aprova; a fase vira planejada e as questões resolvidas voltam ao project.md.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#2b6468">5</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Plano</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d">Tarefas em bloco, na ordem certa, validadas pelo sdd-check.</p>
+    </div>
+  </div>
+  <p style="font-size:28px; line-height:1.45; color:#5d6168">Parou no meio? Rode <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/plan &lt;slug&gt;</span> de novo: ele lê o status no disco e continua dali.</p>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Especificação · 08</p>
+  <aside>Use /plan fase N quando houver roadmap. Uma entrada como 'sistema de despesas' é barrada pela guarda de escopo.</aside>
+</section>
+<section id="spec" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 2 · ESPECIFICAÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">A spec: linguagem que dá para testar</h2>
+  </div>
+  <div style="background:#1b1f24; border-radius:16px; padding:40px 48px"><p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; line-height:1.6; color:#f3efe6"><span style="color:#e0874f">RF-01</span> QUANDO o colaborador envia a solicitação, O sistema DEVE ...<br><span style="color:#e0874f">RF-02</span> SE o valor passar de R$ 500, ENTÃO O sistema DEVE ...<br><span style="color:#e0874f">RF-03</span> ENQUANTO a solicitação estiver em análise, O sistema DEVE ...<br><span style="color:#7fb6b9">RNF-01 (segurança)</span> apenas o autor e o gestor da área acessam a solicitação<br><span style="color:#7fb6b9">CA-06 (RNF-01)</span> usuário de outra área recebe acesso negado e nenhum dado<br><span style="color:#7fb6b9">CA-07 (RF-01)</span> colaborador chega à tela pelo menu lateral e vê o toast ao enviar<br><span style="color:#a9a49a">[CLARIFICAR]</span> reembolso parcial de item reprovado? Opções: sim | não</p></div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Três formas de requisito</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Evento, exceção e estado. Sempre com resposta observável.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Interface é requisito</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Ponto de entrada, retorno após a ação, estados vazio/erro e o que a tela mostra em cada estado terminal.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Segurança é requisito</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Área sensível gera RNF com critérios negativos.</p>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Especificação · 09</p>
+  <aside>Ambiguidade nunca vira palpite: vira CLARIFICAR com as opções em jogo. Tela que ninguém alcança é defeito — e só vira teste se estiver escrita aqui.</aside>
+</section>
+<section id="tarefa" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 2 · ESPECIFICAÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">O plano: cada tarefa é um bloco</h2>
+  </div>
+  <div style="display:flex; gap:40px">
+    <div style="flex:3; background:#1b1f24; border-radius:16px; padding:40px 48px"><p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:25px; line-height:1.6; color:#f3efe6">- [ ] T-03 Tela de detalhe da solicitação<br>&nbsp;&nbsp;- Cobre: CA-02, CA-06<br>&nbsp;&nbsp;- Depende: T-01<br>&nbsp;&nbsp;- Arquivos: `resources/js/pages/expenses/show.tsx`<br>&nbsp;&nbsp;- Valida: `php artisan test --filter Detalhe`<br>&nbsp;&nbsp;- <span style="color:#e0874f">Sensível: sim — autorização por área</span><br>&nbsp;&nbsp;- <span style="color:#7fb6b9">Interface: `/despesas/{id}` — referência: `.../index.tsx`</span><br><br>- [ ] T-09 <span style="color:#7fb6b9">[humano: verificação]</span> conferir o recibo impresso</p></div>
+    <div style="flex:2; display:flex; flex-direction:column; gap:18px">
+      <p style="font-size:27px; line-height:1.4"><b>Cobre</b> liga a tarefa aos critérios da spec.</p>
+      <p style="font-size:27px; line-height:1.4"><b>Valida</b> só usa comandos do config.json.</p>
+      <p style="font-size:27px; line-height:1.4"><b>Sensível</b> ativa o checklist de segurança.</p>
+      <p style="font-size:27px; line-height:1.4"><b>Interface</b> aciona a verificação no navegador e aponta a tela de referência.</p>
+      <p style="font-size:27px; line-height:1.4"><b>[humano]</b> é ação, nunca decisão — decisão volta para a spec.</p>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Especificação · 10</p>
+  <aside>Contrato que o ralph.sh lê. A navegação vem antes da tela que depende dela; tarefas humanas de acesso no início, verificação no fim.</aside>
+</section>
+<section id="execucao" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 3 · EXECUÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">Execução: cada tarefa passa por cinco portas</h2>
+  </div>
+  <div style="display:flex; gap:20px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#2b6468">1</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Implementar</h3>
+      <p style="font-size:23px; line-height:1.45; color:#33373d">Só nos arquivos declarados. Plano, spec e config são protegidos.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#2b6468">2</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Testar</h3>
+      <p style="font-size:23px; line-height:1.45; color:#33373d">sdd-test-agent escreve testes a partir dos critérios, inclusive os negativos.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#b24d17">3</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Gate mecânico</h3>
+      <p style="font-size:23px; line-height:1.45; color:#33373d">O comando de teste roda por fora do agente. Vale o código de saída.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#b24d17">4</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Interface</h3>
+      <p style="font-size:23px; line-height:1.45; color:#33373d">Tocou o frontend? sdd-ui-agent percorre a tela num navegador real.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#2b6468">5</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Revisão</h3>
+      <p style="font-size:23px; line-height:1.45; color:#33373d">sdd-review-agent, somente leitura. Só APROVADO explícito aprova.</p>
+    </div>
+  </div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Falhou?</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Até 3 ciclos de correção, com a causa real entregue ao agente como dado.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Passou?</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Varredura de segredos → marca [x] → log → commit. Nessa ordem.</p>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Execução · 11</p>
+  <aside>/implement e ralph.sh seguem exatamente o mesmo contrato e são intercambiáveis no meio de uma feature.</aside>
+</section>
+<section id="interface" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px; justify-content:space-between">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 3 · EXECUÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">Verificação de interface: a tela é testada na tela</h2>
+  </div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #2b6468; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Como funciona</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">O script recria o banco de verificação, sobe um servidor próprio e o <b>sdd-ui-agent</b> abre a aplicação pelo Playwright MCP: chega à tela <b>pela navegação</b>, percorre os critérios com cada ator, captura desktop e mobile e compara com a tela de referência.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #b24d17; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">O que reprova</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Critério que não se completa pela tela, erro no console, requisição 4xx/5xx inesperada, retorno ou estado que a spec exige e não aparece, tela inutilizável em mobile. Diferença visual é <b>ressalva</b>, com captura.</p>
+    </div>
+  </div>
+  <p style="font-size:27px; line-height:1.45; color:#5d6168">Ambiente separado do de desenvolvimento, com dois usuários de cada papel — é isso que torna os critérios negativos verificáveis na tela. Sem ambiente configurado, a tarefa não passa; <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">--sem-ui</span> pula e registra.</p>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Execução · 12</p>
+  <aside>Menu sem link, ação sem retorno e botão cortado em mobile passam por testes verdes. Só o navegador pega.</aside>
+</section>
+<section id="fecho" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 3 · EXECUÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">Fecho da feature</h2>
+  </div>
+  <table style="width:1664px; border-collapse:collapse"><tr><th style="text-align:left; padding:16px 24px; font-size:25px; font-weight:600; background:#1b1f24; color:#f3efe6">Ordem</th><th style="text-align:left; padding:16px 24px; font-size:25px; font-weight:600; background:#1b1f24; color:#f3efe6">Verificação</th><th style="text-align:left; padding:16px 24px; font-size:25px; font-weight:600; background:#1b1f24; color:#f3efe6">Se falhar</th></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">1</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Suíte completa de testes</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Feature não fecha</td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">2</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Interface da feature inteira: todos os critérios com tela, com cada ator</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Feature não fecha</td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">3</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">E2E versionado (<span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">commands.e2e</span>), se o projeto tiver</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Feature não fecha</td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">4</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Gate de segurança (<span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">commands.security</span>): auditoria, análise estática</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Decisão sua — nada é instalado</td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">5</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Revisão da feature inteira: primeira linha <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">VEREDITO: ...</span></td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Sem veredito válido, não fecha</td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">6</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Fase → implementada · ressalvas → <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">.sdd/pendencias.md</span></td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">—</td></tr></table>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Execução · 13</p>
+  <aside>A revisão de fecho enxerga o que nenhuma tarefa isolada mostra: autorização esquecida entre tarefas, duplicação, cobertura real dos critérios.</aside>
+</section>
+<section id="ralph" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 3 · EXECUÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">ralph.sh — o plano inteiro, sem você</h2>
+  </div>
+  <div style="display:flex; gap:40px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:24px">
+  <div style="background:#1b1f24; border-radius:16px; padding:40px 48px"><p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:26px; line-height:1.6; color:#f3efe6">ralph.sh &lt;slug&gt; --dry-run<br>ralph.sh &lt;slug&gt; --max-iter 1<br>ralph.sh &lt;slug&gt;</p></div>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Primeira vez: veja o que ele faria, rode uma tarefa, depois solte o plano. Permissões restritas por padrão; <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">--permissoes-totais</span> só em container.</p>
+    </div>
+    <div style="flex:1">
+  <table style="width:780px; border-collapse:collapse"><tr><th style="text-align:left; padding:16px 24px; font-size:26px; font-weight:600; background:#1b1f24; color:#f3efe6">Código</th><th style="text-align:left; padding:16px 24px; font-size:26px; font-weight:600; background:#1b1f24; color:#f3efe6">Parou porque</th></tr><tr><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">0</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">plano concluído</td></tr><tr><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">2</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">precisa de você</td></tr><tr><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">3</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">limite de iterações</td></tr><tr><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">4</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">timeout</td></tr><tr><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">5</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">validação não passou</td></tr><tr><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">6</td><td style="padding:14px 24px; font-size:26px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">possível segredo</td></tr></table>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Execução · 14</p>
+  <aside>O ralph só volta a falar com você quando não tem como decidir sozinho. Nesses casos ele para em vez de improvisar.</aside>
+</section>
+<section id="retomar" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px; justify-content:space-between">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 3 · EXECUÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">Parou? Retomar é rodar de novo</h2>
+  </div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #2b6468; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Corrigir à mão</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Revise o diff, corrija, commite e rode <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">ralph.sh &lt;slug&gt;</span>. Ele segue da próxima pendente.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #b24d17; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Descartar a tentativa</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">--descartar-tentativa</span> limpa o que ficou e refaz a tarefa. Sempre pede confirmação humana.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Seguir sem commit</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">--allow-dirty</span> mantém o trabalho parcial e desliga o commit automático.</p>
+    </div>
+  </div>
+  <p style="font-size:28px; line-height:1.45; color:#5d6168">O estado vive no disco: marcações no plano, um commit por tarefa e o log em .sdd/logs/. Ao parar, o script imprime estas opções com os comandos prontos.</p>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Execução · 15</p>
+  <aside>Se a causa da parada for a spec, e não o código, o caminho é o /revise antes de voltar ao ralph.</aside>
+</section>
+<section id="revise" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 4 · MANUTENÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">/revise — mudança de requisito como diff</h2>
+  </div>
+  <div style="background:#1b1f24; border-radius:16px; padding:40px 48px"><p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:25px; line-height:1.6; color:#f3efe6">Requisitos funcionais<br>&nbsp;&nbsp;<span style="color:#7fb6b9">+ RF-05</span>  QUANDO o valor ultrapassar R$ 1.000, O sistema DEVE exigir o diretor<br>&nbsp;&nbsp;<span style="color:#e0874f">~ RF-02</span>  antes: ... reprovar   →   depois: ... devolver para ajuste<br>&nbsp;&nbsp;<span style="color:#a9a49a">- RF-03</span>  (obsoleto) aprovação única para qualquer valor</p></div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Nada escrito antes do OK</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Diff, perguntas e aprovação, como no /plan.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Concluídas não são desmarcadas</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Viram tarefas de ajuste com <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">Revisa: T-03</span>.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Histórico preservado</h3>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Obsoletos vão para o fim da spec; a fase volta a planejada.</p>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Manutenção · 16</p>
+  <aside>Mudança grande demais — fluxo novo, ator novo, mais de umas 6 tarefas — vira spec nova ou fase nova.</aside>
+</section>
+<section id="agentes" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px; justify-content:space-between">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">ETAPA 4 · MANUTENÇÃO</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">Os três agentes</h2>
+  </div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #2b6468; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">sdd-test-agent</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d">Lê a spec antes do código e escreve os testes a partir dos critérios. Escolhe o nível pelo tipo do critério. Prova que o indevido é recusado. Só escreve arquivos de teste; nunca instala nada nem corrige a implementação.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #b24d17; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">sdd-ui-agent</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d">Modelo sonnet, só leitura e navegador. Abre a aplicação no ambiente de verificação, chega à tela pela navegação, captura desktop e mobile e devolve INTERFACE: APROVADA ou REPROVADA com evidência.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #b24d17; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">sdd-review-agent</h3>
+      <p style="font-size:24px; line-height:1.45; color:#33373d">Modelo haiku, só Read, Grep e Glob, recebe o diff pronto. Por tarefa e por feature: critérios, escopo, padrões, teste tautológico e checklist de segurança. Bloqueia só com evidência em arquivo:linha.</p>
+    </div>
+  </div>
+  <p style="font-size:28px; line-height:1.45; color:#5d6168"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/review &lt;slug&gt;</span> ou <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/review --diff &lt;range&gt;</span> roda a revisão sob demanda, inclusive em código escrito fora do harness.</p>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Agentes · 17</p>
+  <aside>Separar autor de verificador é a base: quem escreveu reaplica o mesmo raciocínio que produziu a falha.</aside>
+</section>
+<section id="validacao" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">PROTEÇÕES</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">O que é estrutural fica com máquina</h2>
+  </div>
+  <div style="display:flex; gap:40px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:24px">
+  <div style="background:#1b1f24; border-radius:16px; padding:40px 48px"><p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:25px; line-height:1.6; color:#f3efe6">sdd-check.sh standards | project | roadmap<br>sdd-check.sh spec|plan|revise &lt;slug&gt;</p></div>
+      <p style="font-size:26px; line-height:1.45; color:#33373d">Os comandos chamam o validador no fim de cada etapa, e você pode rodá-lo à mão. Falha encontrada é corrigida antes de encerrar.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:20px">
+      <p style="font-size:26px; line-height:1.45">Seções obrigatórias, IDs únicos e existentes, todo critério com tarefa, dependências só para trás, formato do bloco de tarefa, motivo de [humano] válido, decisão disfarçada de tarefa, comando encadeado no config, obsoleto de volta na spec.</p>
+      <p style="font-size:26px; line-height:1.45; color:#5d6168">Regra em texto no fim de um comando longo é pulada; script não.</p>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Validação · 18</p>
+  <aside>Extrair as validações para script foi a resposta a uma regra que o modelo ignorou na prática. Os dois scripts têm suíte de testes própria, que não gasta tokens.</aside>
+</section>
+<section id="seguranca" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px; justify-content:space-between">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">PROTEÇÕES</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">Segurança em duas frentes</h2>
+  </div>
+  <div style="display:flex; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #b24d17; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Do próprio harness</h3>
+      <p style="font-size:25px; line-height:1.45; color:#33373d">Arquivos protegidos restaurados se o agente mexer · revisão e interface fail-closed · revisor sem shell · permissões restritas · varredura de segredos antes do commit · comandos de gate listados antes de rodar · descarte exige humano.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border-top:6px solid #2b6468; border:1px solid #e2ddd2; border-radius:16px; padding:36px">
+      <h3 style="font-size:32px; font-weight:600; line-height:1.2">Do código produzido</h3>
+      <p style="font-size:25px; line-height:1.45; color:#33373d">Requisito: RNF de segurança com critérios negativos. Teste: o indevido é recusado. Revisão: checklist OWASP agnóstico de stack. Gate: auditoria e análise estática no fecho.</p>
+    </div>
+  </div>
+  <p style="font-size:27px; line-height:1.45; color:#5d6168">Limite honesto: a varredura só pega padrões conhecidos de chave, e o log guarda a saída do modelo em texto puro, fora do git.</p>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Segurança · 19</p>
+  <aside>O harness parte do princípio de que o agente pode errar ou ser manipulado pelo que lê. Por isso as garantias são mecânicas.</aside>
+</section>
+<section id="caminhos" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">NO DIA A DIA</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">Qual comando usar</h2>
+  </div>
+  <table style="width:1664px; border-collapse:collapse"><tr><th style="text-align:left; padding:16px 24px; font-size:25px; font-weight:600; background:#1b1f24; color:#f3efe6">Situação</th><th style="text-align:left; padding:16px 24px; font-size:25px; font-weight:600; background:#1b1f24; color:#f3efe6">Caminho</th></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Projeto novo</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/init</span> (3×) → <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/plan fase 1</span> → <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/implement</span> ou <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">ralph.sh</span></td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Projeto existente</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/init</span> → <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/plan &lt;funcionalidade&gt;</span> → execução</td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Funcionalidade já no roadmap</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/plan fase N</span></td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Muda fluxo, ator, entidade ou regra</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">init:project</span> → <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">init:roadmap</span> → <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/plan fase N</span></td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Capacidade isolada</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/plan &lt;descrição&gt;</span></td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">Altera algo já planejado ou feito</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/revise &lt;slug&gt; &lt;mudança&gt;</span></td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2">Atualizou o plugin</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#fffdf8; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/init</span> acusa <b>desatualizado (formato)</b> → rode o passo indicado</td></tr><tr><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2">MVP pronto, sistema em produção</td><td style="padding:14px 24px; font-size:25px; line-height:1.35; background:#efebe2; border-bottom:1px solid #e2ddd2"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">init:context --existente</span> → passa a usar o codebase.md</td></tr></table>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Uso · 20</p>
+  <aside>A árvore de decisão resume quando cada comando entra.</aside>
+</section>
+<section id="voce" data-transition="fade" style="background:#1b1f24; color:#f3efe6; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px; display:flex; flex-direction:column; justify-content:center; gap:40px">
+  <p style="font-size:26px; font-weight:600; letter-spacing:2px; color:#e0874f">O QUE DEPENDE DE VOCÊ</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.15; width:1500px">O harness decide o que dá para verificar. O resto é seu.</h2>
+  <div style="display:flex; gap:32px">
+    <p style="flex:1; font-size:30px; line-height:1.5; color:#cfc9bd">Responder o init e os CLARIFICAR<br>Aprovar a spec e os diffs</p>
+    <p style="flex:1; font-size:30px; line-height:1.5; color:#cfc9bd">Executar as tarefas [humano]<br>Toda instalação de dependência</p>
+    <p style="flex:1; font-size:30px; line-height:1.5; color:#cfc9bd">Decidir quando o ralph para<br>Push e deploy — sempre</p>
+  </div>
+  <aside>Responsabilidades que o harness nunca assume sozinho.</aside>
+</section>
+<section id="comecar" data-transition="fade" style="background:#f6f4ef; color:#1b1f24; font-family:'IBM Plex Sans', Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px; justify-content:space-between">
+  <div style="display:flex; flex-direction:column; gap:12px">
+  <p style="font-size:24px; font-weight:600; letter-spacing:2px; color:#b24d17">PRÓXIMOS PASSOS</p>
+  <h2 style="font-size:64px; font-weight:600; line-height:1.1">Primeiro teste sugerido</h2>
+  </div>
+  <div style="display:flex; gap:24px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#2b6468">1</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Instalar</h3>
+      <p style="font-size:23px; line-height:1.45; color:#33373d">Marketplace local e plugin 2.3.0.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#2b6468">2</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Inicializar</h3>
+      <p style="font-size:23px; line-height:1.45; color:#33373d"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/init</span> até “inicialização completa”; aceite a verificação de interface.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#b24d17">3</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Planejar</h3>
+      <p style="font-size:23px; line-height:1.45; color:#33373d"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">/plan fase N</span> — confira critérios de interface, RNF de segurança e a ordem das tarefas.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; background:#fffdf8; border:1px solid #e2ddd2; border-radius:16px; padding:32px">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:40px; font-weight:700; color:#b24d17">4</p>
+      <h3 style="font-size:30px; font-weight:600; line-height:1.2">Executar</h3>
+      <p style="font-size:23px; line-height:1.45; color:#33373d"><span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">--dry-run</span>, depois <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#b24d17">--max-iter 1</span>, depois o plano inteiro.</p>
+    </div>
+  </div>
+  <p style="font-size:28px; line-height:1.45; color:#5d6168">A validar no seu ambiente: o Playwright MCP dentro do modo headless e a lista restrita de permissões do ralph.</p>
+  <p style="position:absolute; left:128px; bottom:64px; width:1664px; font-size:24px; color:#5d6168">spec-driven-dev · Próximos passos · 22</p>
+  <aside>A primeira feature com tela monta o ambiente de verificação; as seguintes só reaproveitam.</aside>
+</section>
+</div></div>
+<div id="notas" role="note" aria-live="polite"></div>
+<nav id="barra" aria-label="Navegação da apresentação">
+  <button id="ant" aria-label="Slide anterior">‹</button>
+  <span id="contador">1 / 1</span>
+  <button id="prox" aria-label="Próximo slide">›</button>
+  <button id="btnNotas" aria-pressed="false">Notas (N)</button>
+  <button id="btnTela">Tela cheia (F)</button>
+</nav>
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var slides = Array.prototype.slice.call(stage.querySelectorAll(':scope > section'));
+  var contador = document.getElementById('contador');
+  var notas = document.getElementById('notas');
+  var btnNotas = document.getElementById('btnNotas');
+  var atual = 0;
+
+  function escala() {
+    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    stage.style.transform = 'scale(' + s + ')';
+  }
+  function inicioPorHash() {
+    var n = parseInt((location.hash || '').replace('#', ''), 10);
+    return (n >= 1 && n <= slides.length) ? n - 1 : 0;
+  }
+  function mostrar(i) {
+    atual = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (s, k) { s.classList.toggle('ativo', k === atual); });
+    contador.textContent = (atual + 1) + ' / ' + slides.length;
+    var aside = slides[atual].querySelector('aside');
+    notas.textContent = aside ? aside.textContent.trim() : '';
+    if (history.replaceState) history.replaceState(null, '', '#' + (atual + 1));
+  }
+  function alternarNotas() {
+    var v = notas.classList.toggle('visivel');
+    btnNotas.setAttribute('aria-pressed', v ? 'true' : 'false');
+  }
+  function telaCheia() {
+    if (!document.fullscreenElement) { (document.documentElement.requestFullscreen || function(){}).call(document.documentElement); }
+    else if (document.exitFullscreen) { document.exitFullscreen(); }
+  }
+
+  document.getElementById('ant').addEventListener('click', function () { mostrar(atual - 1); });
+  document.getElementById('prox').addEventListener('click', function () { mostrar(atual + 1); });
+  btnNotas.addEventListener('click', alternarNotas);
+  document.getElementById('btnTela').addEventListener('click', telaCheia);
+  document.addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return;
+    switch (e.key) {
+      case 'ArrowRight': case 'PageDown': case ' ': mostrar(atual + 1); e.preventDefault(); break;
+      case 'ArrowLeft': case 'PageUp': mostrar(atual - 1); e.preventDefault(); break;
+      case 'Home': mostrar(0); break;
+      case 'End': mostrar(slides.length - 1); break;
+      case 'n': case 'N': alternarNotas(); break;
+      case 'f': case 'F': telaCheia(); break;
+    }
+  });
+  var toqueX = null;
+  document.addEventListener('touchstart', function (e) { toqueX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (toqueX === null) return;
+    var dx = e.changedTouches[0].clientX - toqueX;
+    if (Math.abs(dx) > 50) mostrar(atual + (dx < 0 ? 1 : -1));
+    toqueX = null;
+  });
+  window.addEventListener('resize', escala);
+  escala();
+  mostrar(inicioPorHash());
+})();
+</script>
+</body>
+</html>

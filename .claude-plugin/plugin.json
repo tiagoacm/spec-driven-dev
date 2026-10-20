@@ -1,0 +1,6 @@
+{
+  "name": "spec-driven-dev",
+  "version": "2.3.0",
+  "description": "Workflow de Spec Driven Development (SDD) agnóstico de tecnologia: inicialização do contexto do projeto, spec com critérios rastreáveis, plano em tarefas verificáveis, execução interativa ou autônoma com gate de teste mecânico e revisão independente.",
+  "author": { "name": "Pixel" }
+}
